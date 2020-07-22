@@ -1,10 +1,8 @@
-package main
+package githubfs
 
-// 52.44
 import (
 	"context"
 	"encoding/base64"
-	"fmt"
 	"os"
 	"path"
 	"strings"
@@ -12,10 +10,8 @@ import (
 	"time"
 
 	"github.com/google/go-github/github"
-	"github.com/kr/pretty"
 	"github.com/spf13/afero"
 	"github.com/spf13/afero/mem"
-	"golang.org/x/oauth2"
 )
 
 // 1.33
@@ -287,27 +283,4 @@ func (fs *githubFs) Chmod(name string, mode os.FileMode) error {
 //Chtimes changes the access and modification times of the named file
 func (fs *githubFs) Chtimes(name string, atime time.Time, mtime time.Time) error {
 	return nil
-}
-
-func main() {
-	githubToken := "11ddc8caef2a0a84649dcf3b6ca2db4f4b1d9b0b"
-	ctx := context.Background()
-	ts := oauth2.StaticTokenSource(
-		&oauth2.Token{AccessToken: githubToken},
-	)
-	tc := oauth2.NewClient(ctx, ts)
-
-	client := github.NewClient(tc)
-
-	fs, err := newGithubfs(client, "darksidergod", "githubfs-test", "master")
-	if err != nil {
-		panic(err)
-	}
-	//info, _ := afero.ReadDir(fs, "/")
-	//err = fs.Remove("/base.yaml")
-	//data, _ := afero.ReadFile(fs, "/core.yaml")
-	//os.Stdout.Write(data)
-	//err = fs.RemoveAll("/channel-artifacts")
-	err = fs.Rename("/configtx.txt", "/configtx.yaml")
-	fmt.Printf("%# v", pretty.Formatter(err))
 }

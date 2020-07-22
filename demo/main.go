@@ -1,3 +1,14 @@
+package main
+
+import (
+	"context"
+	"fmt"
+
+	"github.com/google/go-github/github"
+	"github.com/kr/pretty"
+	"golang.org/x/oauth2"
+)
+
 func main() {
 	githubToken := "11ddc8caef2a0a84649dcf3b6ca2db4f4b1d9b0b"
 	ctx := context.Background()
@@ -8,7 +19,7 @@ func main() {
 
 	client := github.NewClient(tc)
 
-	fs, err := newGithubfs(client, "darksidergod", "githubfs-test", "master")
+	fs, err := githubfs.newGithubfs(client, "darksidergod", "githubfs-test", "master")
 	if err != nil {
 		panic(err)
 	}
