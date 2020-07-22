@@ -47,7 +47,7 @@ func createFile(name string) *mem.File {
 	return file
 }
 
-func newGithubfs(client *github.Client, user string, repo string, branch string) (afero.Fs, error) {
+func NewGithubfs(client *github.Client, user string, repo string, branch string) (afero.Fs, error) {
 	ghfs := &githubFs{
 		client: client,
 		user:   user,
