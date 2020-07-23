@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/darksidergod/githubfs-test/githubfs"
 	"github.com/google/go-github/github"
 	"github.com/kr/pretty"
 	"golang.org/x/oauth2"
@@ -19,7 +20,7 @@ func main() {
 
 	client := github.NewClient(tc)
 
-	fs, err := githubfs.newGithubfs(client, "darksidergod", "githubfs-test", "master")
+	fs, err := githubfs.NewGithubfs(client, "darksidergod", "githubfs-test", "master")
 	if err != nil {
 		panic(err)
 	}
