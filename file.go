@@ -23,6 +23,8 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/google/go-github/github"
 )
 
 const FilePathSeparator = string(filepath.Separator)
@@ -34,6 +36,9 @@ type File struct {
 	closed       bool
 	readOnly     bool
 	fileData     *FileData
+
+	//fs    *githubFs
+	entry github.TreeEntry
 }
 
 func NewFileHandle(data *FileData) *File {
@@ -104,6 +109,7 @@ func (f *File) Open() error {
 	f.fileData.Lock()
 	f.closed = false
 	f.fileData.Unlock()
+	f.Sync()
 	return nil
 }
 

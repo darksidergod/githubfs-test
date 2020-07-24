@@ -11,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package mem
+package githubfs
 
 import "sort"
 
@@ -21,6 +21,14 @@ type Dir interface {
 	Files() []*FileData
 	Add(*FileData)
 	Remove(*FileData)
+}
+
+func RemoveFromMemDir(dir *FileData, f *FileData) {
+	dir.memDir.Remove(f)
+}
+
+func AddToMemDir(dir *FileData, f *FileData) {
+	dir.memDir.Add(f)
 }
 
 type DirMap map[string]*FileData
