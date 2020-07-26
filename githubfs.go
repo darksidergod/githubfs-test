@@ -186,7 +186,6 @@ func (fs *githubFs) MkdirAll(path string, perm os.FileMode) error {
 	if len(parentNames) == 0 {
 		return fs.Mkdir(path, perm)
 	}
-
 	for i := range parentNames {
 		fs.mu.Lock()
 		parentPath := strings.Join(parentNames[0:i+1], FilePathSeparator)
