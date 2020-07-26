@@ -1,9 +1,11 @@
 package githubfs
 
-// Part 3 1.48
+// 2.34.46
 import (
 	"context"
 	"encoding/base64"
+	"errors"
+	"fmt"
 	"os"
 	"path"
 	"path/filepath"
@@ -12,6 +14,7 @@ import (
 	"time"
 
 	"github.com/google/go-github/github"
+	"github.com/kr/pretty"
 	"github.com/spf13/afero"
 	"github.com/spf13/afero/mem"
 )
@@ -38,7 +41,7 @@ type githubFs struct {
 	mu     sync.Mutex
 }
 
-func convstring(s string) *string {
+func Convstring(s string) *string {
 	return &s
 }
 
@@ -74,9 +77,85 @@ func (fs *githubFs) updateTree(sha string) (err error) {
 }
 
 func (fs *githubFs) Create(name string) (afero.File, error) {
+	fs.mu.Lock()
+	defer fs.mu.Unlock()
+	normalName := strings.TrimPrefix(name, "/")
+	if normalName == "" {
+		return nil, os.ErrInvalid
+	}
+	entry := fs.findEntry(normalName)
+	if entry != nil {
+		return nil, afero.ErrFileExists
+	}
+	parent := fs.findEntry(filepath.Dir(normalName))
+	if parent == nil {
+		return nil, os.ErrNotExist
+	}
+	blob, _, err := fs.client.Git.CreateBlob(context.TODO(), fs.user, fs.repo, &github.Blob{
+		Content: Convstring(""),
+	})
+	if err != nil {
+		return nil, err
+	}
+	fs.tree.Entries = append(fs.tree.Entries, &github.TreeEntry{
+		Type: Convstring("blob"),
+		Mode: Convstring("100644"),
+		Path: Convstring(normalName),
+		SHA:  blob.SHA,
+	})
+	fmt.Println("creating tress")
+	err = fs.createTreesFromEntries(parent.GetPath())
+	if err != nil {
+		fmt.Printf("%# v", pretty.Formatter(fs.tree))
+		return nil, err
+	}
+	err = fs.commit()
+	if err != nil {
+		return nil, err
+	}
+
 	fileData := CreateFile(name)
 	file := NewFileHandle(fileData)
+
 	return file, nil
+}
+
+func (fs *githubFs) createTreesFromEntries(path string) error {
+	entry := fs.findEntry(path)
+	if entry == nil {
+		return fmt.Errorf("entry not found for path '%s'", path)
+	}
+
+	if entry.SHA == nil {
+		var children []*github.TreeEntry
+		for _, e := range fs.tree.Entries {
+			if strings.HasPrefix(e.GetPath(), path+"/") {
+				relativeName := strings.TrimPrefix(entry.GetPath(), path+"/")
+				if !strings.Contains(relativeName, FilePathSeparator) {
+					relativeEntry := e
+					relativeEntry.Path = Convstring(relativeName)
+					children = append(children, relativeEntry)
+				}
+			}
+		}
+		tree, _, err := fs.client.Git.CreateTree(context.TODO(), fs.user, fs.repo, "", children)
+
+		if err != nil {
+			return err
+		}
+		for i, e := range fs.tree.Entries {
+			if e.GetPath() == entry.GetPath() {
+				fs.tree.Entries[i].SHA = tree.SHA
+			}
+		}
+	}
+
+	parentDir := filepath.Dir(path)
+	if parentDir == "." || parentDir == "" {
+		return nil
+	}
+
+	return fs.createTreesFromEntries(parentDir)
 }
 
 // Mkdir creates a directory in the filesystem, return an error if any
@@ -85,15 +164,16 @@ func (fs *githubFs) Mkdir(name string, perm os.FileMode) error {
 	fs.mu.Lock()
 	defer fs.mu.Unlock()
 	normalName := strings.TrimPrefix(name, "/")
-	parent := fs.findEntry(filepath.Dir(normalName))
-	if normalName != "" && parent == nil {
-		return afero.ErrFileNotFound
+	if strings.Contains(normalName, FilePathSeparator) {
+		if p := fs.findEntry(filepath.Dir(normalName)); p == nil {
+			return afero.ErrFileNotFound
+		}
 	}
 
 	fs.tree.Entries = append(fs.tree.Entries, &github.TreeEntry{
-		Type: convstring("tree"),
-		Mode: convstring("040000"),
-		Path: convstring(normalName),
+		Type: Convstring("tree"),
+		Mode: Convstring("040000"),
+		Path: Convstring(normalName),
 	})
 	return nil
 }
@@ -110,6 +190,7 @@ func (fs *githubFs) MkdirAll(path string, perm os.FileMode) error {
 	for i := range parentNames {
 		fs.mu.Lock()
 		parentPath := strings.Join(parentNames[0:i+1], FilePathSeparator)
+		fmt.Println(parentPath)
 		parent := fs.findEntry(parentPath)
 		fs.mu.Unlock()
 		if parent == nil {
@@ -153,9 +234,7 @@ func (fs *githubFs) open(name string) (afero.File, *FileData, error) {
 		if err != nil {
 			return nil, nil, err
 		}
-		b, _ := base64.StdEncoding.DecodeString(blob.GetContent())
-		f.Write(b)
-		f.Seek(0, 0)
+		fd.data, _ = base64.StdEncoding.DecodeString(blob.GetContent())
 		return f, fd, nil
 	}
 
@@ -196,12 +275,18 @@ func (fs *githubFs) Open(name string) (afero.File, error) {
 // OpenFile opens a file using the given flags and the given mode.
 func (fs *githubFs) OpenFile(name string, flag int, perm os.FileMode) (afero.File, error) {
 	fs.mu.Lock()
-	defer fs.mu.Unlock()
 	_, fd, err := fs.open(name)
+	fs.mu.Unlock()
+	if err == afero.ErrFileNotFound && flag&os.O_CREATE != 0 {
+		return fs.Create(name)
+
+	}
+
 	if fd != nil {
 		SetMode(fd, perm)
+		return NewFileHandle(fd), nil
 	}
-	return NewFileHandle(fd), err
+	return nil, err
 }
 
 func (fs *githubFs) Remove(name string) error {
@@ -219,9 +304,9 @@ func (fs *githubFs) remove(name string) error {
 		return afero.ErrFileNotFound
 	}
 	resp, _, err := fs.client.Repositories.DeleteFile(context.TODO(), fs.user, fs.repo, normalName, &github.RepositoryContentFileOptions{
-		Message: convstring(commitMessage),
-		SHA:     convstring(entry.GetSHA()),
-		Branch:  convstring(fs.branch.GetName()),
+		Message: Convstring(commitMessage),
+		SHA:     Convstring(entry.GetSHA()),
+		Branch:  Convstring(fs.branch.GetName()),
 	})
 	if err != nil {
 		return err
@@ -264,30 +349,19 @@ func (fs *githubFs) Rename(oldname, newname string) error {
 	defer fs.mu.Unlock()
 	normalOld := strings.TrimPrefix(oldname, "/")
 	normalNew := strings.TrimPrefix(newname, "/")
-	err := fs.updateBranch()
-	if err != nil {
-		return err
-	}
-	err = fs.updateTree(fs.branch.Commit.Commit.Tree.GetSHA())
-	if err != nil {
-		return err
-	}
-	var entries []*github.TreeEntry
-	for _, e := range fs.tree.Entries {
+	for i, e := range fs.tree.Entries {
 		if e.GetPath() == normalOld {
-			e.Path = convstring(normalNew)
+			fs.tree.Entries[i].Path = Convstring(normalNew)
 		}
-		e.Content = nil
-		e.URL = nil
-		e.Size = nil
-		entries = append(entries, e)
 	}
-	tree, _, err := fs.client.Git.CreateTree(context.TODO(), fs.user, fs.repo, "", entries)
+	tree, _, err := fs.client.Git.CreateTree(context.TODO(), fs.user, fs.repo, "", fs.tree.Entries)
+	if err != nil {
+		return err
+	}
 	err = fs.updateTree(tree.GetSHA())
 	if err != nil {
 		return err
 	}
-
 	return fs.commit()
 }
 
@@ -297,8 +371,15 @@ func (fs *githubFs) updateBranch() (err error) {
 }
 
 func (fs *githubFs) commit() error {
+	branch, _, err := fs.client.Repositories.GetBranch(context.TODO(), fs.user, fs.repo, fs.branch.GetName())
+	if err != nil {
+		return err
+	}
+	if branch.GetCommit().GetSHA() != *fs.branch.Commit.GetCommit().SHA {
+		return errors.New("operations were performed before this commit req")
+	}
 	commit, _, err := fs.client.Git.CreateCommit(context.TODO(), fs.user, fs.repo, &github.Commit{
-		Message: convstring(commitmsg),
+		Message: Convstring(commitmsg),
 		Tree:    fs.tree,
 		Parents: []*github.Commit{{SHA: fs.branch.GetCommit().SHA}},
 	})
@@ -307,13 +388,17 @@ func (fs *githubFs) commit() error {
 		return err
 	}
 	_, _, err = fs.client.Git.UpdateRef(context.TODO(), fs.user, fs.repo, &github.Reference{
-		Ref: convstring("heads/" + fs.branch.GetName()),
+		Ref: Convstring("heads/" + fs.branch.GetName()),
 		Object: &github.GitObject{
 			SHA: commit.SHA,
 		},
 	}, false)
 
-	return err
+	if err != nil {
+		return err
+	}
+
+	return fs.updateBranch()
 }
 
 // Stat returns a FileInfo describing the named file, or an error, if any
