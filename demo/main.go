@@ -10,7 +10,7 @@ import (
 )
 
 func main() {
-	githubToken := "703c681e527d56278ac26d819e03e3a4884d0e5f"
+	githubToken := "d50dbcdaa358e902625a907e5502fe21ab09d915"
 	ctx := context.Background()
 	ts := oauth2.StaticTokenSource(
 		&oauth2.Token{AccessToken: githubToken},
@@ -25,17 +25,11 @@ func main() {
 	}
 	err = fs.MkdirAll("test/foo", 0700)
 	if err != nil {
-		log.Fatal("mkdir", err)
+		log.Fatal(err)
 	}
 	_, err = fs.Create("test/foo/bar")
 	if err != nil {
-		log.Fatal("create", err)
+		log.Fatal(err)
 	}
-	//info, _ := afero.ReadDir(fs, "/")
-	//err = fs.Remove("/base.yaml")
-	//data, _ := afero.ReadFile(fs, "/core.yaml")
-	//os.Stdout.Write(data)
-	//err = fs.RemoveAll("/channel-artifacts")
-	//err = fs.Rename("/configtx.txt", "/configtx.yaml")
-	//fmt.Printf("%# v", pretty.Formatter(err))
+	//fmt.Printf("%# v", pretty.Formatter(fs))
 }
