@@ -139,7 +139,6 @@ func (fs *githubFs) createTreesFromEntries(path string) error {
 			}
 		}
 		tree, _, err := fs.client.Git.CreateTree(context.TODO(), fs.user, fs.repo, "", children)
-
 		if err != nil {
 			return err
 		}
