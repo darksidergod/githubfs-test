@@ -24,9 +24,10 @@ func main() {
 		panic(err)
 	}
 
-	_, err = fs.Create("demo/foobar")
+	f, err := fs.Create("demo/dark")
 	if err != nil {
 		log.Fatal(err)
 	}
+	f.Write([]byte("Hello World."))
 	//fmt.Printf("%# v", pretty.Formatter(fs))
 }

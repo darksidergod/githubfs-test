@@ -43,8 +43,8 @@ type File struct {
 	entry github.TreeEntry
 }
 
-func NewFileHandle(data *FileData) *File {
-	return &File{fileData: data}
+func NewFileHandle(data *FileData, fs *githubFs, entry github.TreeEntry) *File {
+	return &File{fileData: data, fs: fs, entry: entry}
 }
 
 func NewReadOnlyFileHandle(data *FileData) *File {
@@ -122,7 +122,7 @@ func (f *File) Close() error {
 		setModTime(f.fileData, time.Now())
 	}
 	f.fileData.Unlock()
-	return nil
+	return f.Sync()
 }
 
 func (f *File) Name() string {
@@ -134,13 +134,27 @@ func (f *File) Stat() (os.FileInfo, error) {
 }
 
 func (f *File) Sync() error {
-	_, _, err := f.fs.client.Git.CreateBlob(context.TODO(), f.fs.user, f.fs.repo, &github.Blob{
-		Content: Convstring(base64.StdEncoding.EncodeToString(f.fileData.data)),
+	if f.entry.GetType() == "tree" {
+		return nil
+	}
+	f.fileData.Lock()
+	blob, _, err := f.fs.client.Git.CreateBlob(context.TODO(), f.fs.user, f.fs.repo, &github.Blob{
+		Content:  Convstring(base64.StdEncoding.EncodeToString(f.fileData.data)),
+		Encoding: Convstring("base64"),
 	})
+	f.fileData.Lock()
 	if err != nil {
 		return err
 	}
-	return nil
+	f.fs.mu.Lock()
+	defer f.fs.mu.Unlock()
+	for i, e := range f.fs.tree.Entries {
+		if e.GetPath() == f.entry.GetPath() {
+			f.fs.tree.Entries[i].SHA = blob.SHA
+			f.entry.SHA = blob.SHA
+		}
+	}
+	return f.fs.commit()
 }
 
 func (f *File) Readdir(count int) (res []os.FileInfo, err error) {

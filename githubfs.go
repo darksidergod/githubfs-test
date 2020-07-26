@@ -44,12 +44,6 @@ func Convstring(s string) *string {
 	return &s
 }
 
-func createFile(name string) *File {
-	fileData := CreateFile(name)
-	file := NewFileHandle(fileData)
-	return file
-}
-
 func NewGithubfs(client *github.Client, user string, repo string, branch string) (afero.Fs, error) {
 	fs := &githubFs{
 		client: client,
@@ -82,8 +76,8 @@ func (fs *githubFs) Create(name string) (afero.File, error) {
 	if normalName == "" {
 		return nil, os.ErrInvalid
 	}
-	entry := fs.findEntry(normalName)
-	if entry != nil {
+	e := fs.findEntry(normalName)
+	if e != nil {
 		return nil, afero.ErrFileExists
 	}
 	parent := fs.findEntry(filepath.Dir(normalName))
@@ -96,12 +90,13 @@ func (fs *githubFs) Create(name string) (afero.File, error) {
 	if err != nil {
 		return nil, err
 	}
-	fs.tree.Entries = append(fs.tree.Entries, &github.TreeEntry{
+	entry := &github.TreeEntry{
 		Type: Convstring("blob"),
 		Mode: Convstring("100644"),
 		Path: Convstring(normalName),
 		SHA:  blob.SHA,
-	})
+	}
+	fs.tree.Entries = append(fs.tree.Entries, entry)
 	err = fs.createTreesFromEntries(parent.GetPath())
 	if err != nil {
 		return nil, err
@@ -112,7 +107,7 @@ func (fs *githubFs) Create(name string) (afero.File, error) {
 	}
 
 	fileData := CreateFile(name)
-	file := NewFileHandle(fileData)
+	file := NewFileHandle(fileData, fs, *entry)
 
 	return file, nil
 }
@@ -224,7 +219,7 @@ func (fs *githubFs) open(name string) (afero.File, *FileData, error) {
 	if entry.GetType() == "blob" {
 		fd := CreateFile(normalName)
 		SetMode(fd, os.FileMode(int(0644)))
-		f := NewFileHandle(fd)
+		f := NewFileHandle(fd, fs, *entry)
 		blob, _, err := fs.client.Git.GetBlob(context.TODO(), fs.user, fs.repo, entry.GetSHA())
 		if err != nil {
 			return nil, nil, err
@@ -237,6 +232,7 @@ func (fs *githubFs) open(name string) (afero.File, *FileData, error) {
 	if normalName == "" {
 		normalName = "."
 	}
+
 	for _, e := range fs.tree.Entries {
 		if path.Dir(e.GetPath()) != normalName {
 			continue
@@ -256,7 +252,9 @@ func (fs *githubFs) open(name string) (afero.File, *FileData, error) {
 			continue
 		}
 	}
-	return NewFileHandle(dir), dir, nil
+	return NewFileHandle(dir, fs, github.TreeEntry{
+		Type: Convstring("tree"),
+	}), dir, nil
 }
 
 // Open opens a file, returning it or an error, if any happens.
@@ -278,7 +276,7 @@ func (fs *githubFs) OpenFile(name string, flag int, perm os.FileMode) (afero.Fil
 	entry := fs.findEntry(name)
 	if fd != nil && entry != nil {
 		SetMode(fd, perm)
-		return NewFileHandle(fd), nil
+		return NewFileHandle(fd, fs, *entry), nil
 	}
 
 	return nil, err
