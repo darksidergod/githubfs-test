@@ -27,6 +27,8 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+	//fs.Create("test")
+	//fs.Create("test/foo")
 	_, err = fs.Create("test/foo/bar")
 	if err != nil {
 		log.Fatal(err)

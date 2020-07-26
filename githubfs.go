@@ -354,14 +354,7 @@ func (fs *githubFs) Rename(oldname, newname string) error {
 			fs.tree.Entries[i].Path = Convstring(normalNew)
 		}
 	}
-	tree, _, err := fs.client.Git.CreateTree(context.TODO(), fs.user, fs.repo, "", fs.tree.Entries)
-	if err != nil {
-		return err
-	}
-	err = fs.updateTree(tree.GetSHA())
-	if err != nil {
-		return err
-	}
+
 	return fs.commit()
 }
 
@@ -378,6 +371,16 @@ func (fs *githubFs) commit() error {
 	if branch.GetCommit().GetSHA() != *fs.branch.Commit.GetCommit().SHA {
 		return errors.New("operations were performed before this commit req")
 	}
+
+	tree, _, err := fs.client.Git.CreateTree(context.TODO(), fs.user, fs.repo, "", fs.tree.Entries)
+	if err != nil {
+		return err
+	}
+	err = fs.updateTree(tree.GetSHA())
+	if err != nil {
+		return err
+	}
+
 	commit, _, err := fs.client.Git.CreateCommit(context.TODO(), fs.user, fs.repo, &github.Commit{
 		Message: Convstring(commitmsg),
 		Tree:    fs.tree,
