@@ -14,7 +14,6 @@ import (
 	"time"
 
 	"github.com/google/go-github/github"
-	"github.com/kr/pretty"
 	"github.com/spf13/afero"
 	"github.com/spf13/afero/mem"
 )
@@ -103,10 +102,8 @@ func (fs *githubFs) Create(name string) (afero.File, error) {
 		Path: Convstring(normalName),
 		SHA:  blob.SHA,
 	})
-	fmt.Println("creating tress")
 	err = fs.createTreesFromEntries(parent.GetPath())
 	if err != nil {
-		fmt.Printf("%# v", pretty.Formatter(fs.tree))
 		return nil, err
 	}
 	err = fs.commit()
@@ -277,13 +274,13 @@ func (fs *githubFs) OpenFile(name string, flag int, perm os.FileMode) (afero.Fil
 	fs.mu.Unlock()
 	if err == afero.ErrFileNotFound && flag&os.O_CREATE != 0 {
 		return fs.Create(name)
-
 	}
-
-	if fd != nil {
+	entry := fs.findEntry(name)
+	if fd != nil && entry != nil {
 		SetMode(fd, perm)
 		return NewFileHandle(fd), nil
 	}
+
 	return nil, err
 }
 
@@ -352,7 +349,6 @@ func (fs *githubFs) Rename(oldname, newname string) error {
 			fs.tree.Entries[i].Path = Convstring(normalNew)
 		}
 	}
-
 	return fs.commit()
 }
 

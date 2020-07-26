@@ -23,13 +23,8 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	err = fs.MkdirAll("test/foo", 0700)
-	if err != nil {
-		log.Fatal(err)
-	}
-	//fs.Create("test")
-	//fs.Create("test/foo")
-	_, err = fs.Create("test/foo/bar")
+
+	_, err = fs.Create("demo/foobar")
 	if err != nil {
 		log.Fatal(err)
 	}
