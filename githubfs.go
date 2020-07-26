@@ -130,7 +130,7 @@ func (fs *githubFs) createTreesFromEntries(path string) error {
 		var children []*github.TreeEntry
 		for _, e := range fs.tree.Entries {
 			if strings.HasPrefix(e.GetPath(), path+"/") {
-				relativeName := strings.TrimPrefix(entry.GetPath(), path+"/")
+				relativeName := strings.TrimPrefix(e.GetPath(), path+"/")
 				if !strings.Contains(relativeName, FilePathSeparator) {
 					relativeEntry := e
 					relativeEntry.Path = Convstring(relativeName)
