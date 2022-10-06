@@ -41,6 +41,7 @@ type File struct {
 
 	fs    *githubFs
 	entry github.TreeEntry
+	name 		 string
 }
 
 func NewFileHandle(data *FileData, fs *githubFs, entry github.TreeEntry) *File {

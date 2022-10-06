@@ -113,6 +113,7 @@ func (fs *githubFs) Create(name string) (afero.File, error) {
 }
 
 func (fs *githubFs) createTreesFromEntries(path string) error {
+	fmt.Println("creating tresss from entries.")
 	entry := fs.findEntry(path)
 	if entry == nil {
 		return fmt.Errorf("entry not found for path '%s'", path)
@@ -152,6 +153,7 @@ func (fs *githubFs) createTreesFromEntries(path string) error {
 // Mkdir creates a directory in the filesystem, return an error if any
 // happens.
 func (fs *githubFs) Mkdir(name string, perm os.FileMode) error {
+	fmt.Println("creating a directory.")
 	fs.mu.Lock()
 	defer fs.mu.Unlock()
 	normalName := strings.TrimPrefix(name, "/")
@@ -259,6 +261,7 @@ func (fs *githubFs) open(name string) (afero.File, *FileData, error) {
 
 // Open opens a file, returning it or an error, if any happens.
 func (fs *githubFs) Open(name string) (afero.File, error) {
+	fmt.Println("Opening a file.")
 	fs.mu.Lock()
 	defer fs.mu.Unlock()
 	f, _, err := fs.open(name)
